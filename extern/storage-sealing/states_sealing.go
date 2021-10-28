@@ -3,6 +3,8 @@ package sealing
 import (
 	"bytes"
 	"context"
+	"strings"
+	"time"
 
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
@@ -575,6 +577,15 @@ func (m *Sealing) handleCommitting(ctx statemachine.Context, sector SectorInfo) 
 
 	proof, err := m.sealer.SealCommit2(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorType, sector.SectorNumber), c2in)
 	if err != nil {
+		if strings.Contains(err.Error(), "cloud c2") {
+			log.Error(err)
+			log.Errorf("SectorCloudC2Failed....")
+			return ctx.Send(SectorCloudC2Failed{})
+		}
+		if strings.Contains(err.Error(), "WaitCommit2") {
+			log.Debugf("WaitCommit2....")
+			return ctx.Send(SectorWaitCommit2{})
+		}
 		return ctx.Send(SectorComputeProofFailed{xerrors.Errorf("computing seal proof failed(2): %w", err)})
 	}
 
@@ -599,6 +610,12 @@ func (m *Sealing) handleCommitting(ctx statemachine.Context, sector SectorInfo) 
 	return ctx.Send(SectorCommitted{
 		Proof: proof,
 	})
+}
+
+func (m *Sealing) handleWaitCommit2(ctx statemachine.Context, sector SectorInfo) error {
+	log.Info("handleWaitCommit2 state")
+	<-time.NewTimer(300 * time.Second).C
+	return ctx.Send(SectorRetryCloudC2{})
 }
 
 func (m *Sealing) handleSubmitCommit(ctx statemachine.Context, sector SectorInfo) error {
