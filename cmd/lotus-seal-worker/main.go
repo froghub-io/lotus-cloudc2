@@ -186,6 +186,10 @@ var runCmd = &cli.Command{
 	Action: func(cctx *cli.Context) error {
 		log.Info("Starting lotus worker")
 
+		_, cloudc2TokenOk := os.LookupEnv("CLOUD_C2_TOKEN")
+		if !cloudc2TokenOk {
+			return xerrors.Errorf("请设置cloud c2 token(申请矿工token控制台地址：https://console.froghub.cn)")
+		}
 		if !cctx.Bool("enable-gpu-proving") {
 			if err := os.Setenv("BELLMAN_NO_GPU", "true"); err != nil {
 				return xerrors.Errorf("could not set no-gpu env: %+v", err)
