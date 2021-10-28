@@ -1,4 +1,5 @@
-//+build cgo
+//go:build cgo
+// +build cgo
 
 package ffiwrapper
 
@@ -6,6 +7,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"math/bits"
 	"os"
@@ -578,7 +582,55 @@ func (sb *Sealer) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 }
 
 func (sb *Sealer) SealCommit2(ctx context.Context, sector storage.SectorRef, phase1Out storage.Commit1Out) (storage.Proof, error) {
-	return ffi.SealCommitPhase2(phase1Out, sector.ID.Number, sector.ID.Miner)
+
+	// 官网：https://www.froghub.io
+	//2K测试环境-申请矿工token控制台地址：https://2kconsole.froghub.cn
+	token := "你的token"
+	c2AdvertiseAddress := "https://2kcloudc2.froghub.cn/gateway/c2"
+
+	//32/64正式环境-申请矿工token控制台地址：https://console.froghub.cn
+	//token := "你的token"
+	//c2AdvertiseAddress := "https://cloudc2.froghub.cn/gateway/c2"
+
+	sectorSize, err := sector.ProofType.SectorSize()
+	if err != nil {
+		return nil, err
+	}
+	url := fmt.Sprintf("%s/%s", c2AdvertiseAddress, sectorSize.ShortString())
+	request := c2BodyRequest{}
+	request.ActorID = uint64(sector.ID.Miner)
+	request.SectorID = uint64(sector.ID.Number)
+	request.Phase1Out = []byte{}
+	request.Phase1OutMd5 = generateMd5(string(phase1Out))
+	body, err := requestHttpWithSign(token, url, request)
+	if err != nil {
+		log.Error(fmt.Sprintf("%s:%v", CloudC2, err))
+		return nil, errors.New(ProofError)
+	}
+	response := c2BodyResponse{}
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		log.Error(fmt.Sprintf("%s:%v", CloudC2, err))
+		return nil, errors.New(ProofError)
+	}
+	switch response.State {
+	case Fail:
+		return nil, errors.New(ProofError)
+	case Being:
+		return nil, errors.New(WaitCommit2)
+	case Running:
+		return nil, errors.New(WaitCommit2)
+	case Success:
+		return response.Proof, nil
+	case Empty:
+		request.Phase1Out = phase1Out
+		if _, err = requestHttpWithSign(token, url, request); err != nil {
+			return nil, errors.New(ProofError)
+		}
+		return nil, errors.New(WaitCommit2)
+	default:
+		return nil, errors.New(ProofError)
+	}
 }
 
 func (sb *Sealer) FinalizeSector(ctx context.Context, sector storage.SectorRef, keepUnsealed []storage.Range) error {

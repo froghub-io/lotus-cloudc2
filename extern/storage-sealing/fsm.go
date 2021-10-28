@@ -133,6 +133,13 @@ var fsmPlanners = map[SectorState]func(events []statemachine.Event, state *Secto
 		on(SectorFinalizeFailed{}, FinalizeFailed),
 	),
 
+	CloudC2Failed: planOne(
+		on(SectorRetryCloudC2{}, Committing),
+	),
+
+	WaitCommit2: planOne(
+		on(SectorRetryCloudC2{}, Committing),
+	),
 	// Sealing errors
 
 	AddPieceFailed: planOne(),
@@ -164,6 +171,7 @@ var fsmPlanners = map[SectorState]func(events []statemachine.Event, state *Secto
 		on(SectorRetryWaitSeed{}, WaitSeed),
 		on(SectorRetryComputeProof{}, Committing),
 		on(SectorRetryInvalidProof{}, Committing),
+		on(SectorRetryCloudC2{}, Committing),
 		on(SectorRetryPreCommitWait{}, PreCommitWait),
 		on(SectorChainPreCommitFailed{}, PreCommitFailed),
 		on(SectorRetryPreCommit{}, PreCommitting),
@@ -379,6 +387,8 @@ func (m *Sealing) plan(events []statemachine.Event, state *SectorInfo) (func(sta
 		return m.handleWaitSeed, processed, nil
 	case Committing:
 		return m.handleCommitting, processed, nil
+	case WaitCommit2:
+		return m.handleWaitCommit2, processed, nil
 	case SubmitCommit:
 		return m.handleSubmitCommit, processed, nil
 	case SubmitCommitAggregate:
@@ -403,6 +413,8 @@ func (m *Sealing) plan(events []statemachine.Event, state *SectorInfo) (func(sta
 		return m.handleComputeProofFailed, processed, nil
 	case CommitFailed:
 		return m.handleCommitFailed, processed, nil
+	case CloudC2Failed:
+		return m.handleCloudC2Failed, processed, nil
 	case CommitFinalizeFailed:
 		fallthrough
 	case FinalizeFailed:
@@ -507,6 +519,13 @@ func planCommitting(events []statemachine.Event, state *SectorInfo) (uint64, err
 			e.apply(state)
 			state.State = Committing
 			return uint64(i + 1), nil
+		case SectorRetryCloudC2:
+			log.Warn("SectorCloudC2Failed!!!!!!!!!!!!")
+			state.State = Committing
+		case SectorCloudC2Failed:
+			state.State = CloudC2Failed
+		case SectorWaitCommit2:
+			state.State = WaitCommit2
 		case SectorComputeProofFailed:
 			state.State = ComputeProofFailed
 		case SectorSealPreCommit1Failed:
