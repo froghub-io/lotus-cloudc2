@@ -430,3 +430,9 @@ func (m *Sealing) HandleRecoverDealIDs(ctx Context, sector SectorInfo) error {
 	// Not much to do here, we can't go back in time to commit this sector
 	return ctx.Send(SectorUpdateDealIDs{Updates: updates})
 }
+func (m *Sealing) handleCloudC2Failed(ctx statemachine.Context, sector SectorInfo) error {
+	if err := failedCooldown(ctx, sector); err != nil {
+		return err
+	}
+	return ctx.Send(SectorRetryCloudC2{})
+}
