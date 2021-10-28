@@ -517,3 +517,19 @@ type SectorRemoveFailed struct{ error }
 
 func (evt SectorRemoveFailed) FormatError(xerrors.Printer) (next error) { return evt.error }
 func (evt SectorRemoveFailed) apply(*SectorInfo)                        {}
+
+type SectorCloudC2Failed struct{ error }
+
+func (evt SectorCloudC2Failed) FormatError(xerrors.Printer) (next error) { return evt.error }
+func (evt SectorCloudC2Failed) apply(*SectorInfo)                        {}
+
+type SectorRetryCloudC2 struct{}
+
+func (evt SectorRetryCloudC2) apply(state *SectorInfo) {
+}
+
+type SectorWaitCommit2 struct{}
+
+func (evt SectorWaitCommit2) apply(state *SectorInfo) {
+	state.State = WaitCommit2
+}
